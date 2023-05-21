@@ -92,7 +92,10 @@ class ModBot(discord.Client):
         # Let the report class handle this message; forward all the messages it returns to uss
         responses = await self.reports[author_id].handle_message(message)
         for r in responses:
-            await message.channel.send(r)
+            if isinstance(r, dict):
+                    await message.channel.send(r["content"], embed = r["embed"])
+            else:
+                await message.channel.send(r)
 
         # If the report is complete or cancelled, remove it from our map
         if self.reports[author_id].report_complete():

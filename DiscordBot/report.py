@@ -7,11 +7,14 @@ class State(Enum):
     AWAITING_MESSAGE = auto()
     MESSAGE_IDENTIFIED = auto()
     REPORT_COMPLETE = auto()
+    CHOOSE_CATEGORY = auto()
 
 class Report:
     START_KEYWORD = "report"
     CANCEL_KEYWORD = "cancel"
     HELP_KEYWORD = "help"
+
+    ABUSE_TYPES = ['1', '2', '3', '4']
 
     def __init__(self, client):
         self.state = State.REPORT_START
@@ -55,13 +58,47 @@ class Report:
 
             # Here we've found the message - it's up to you to decide what to do next!
             self.state = State.MESSAGE_IDENTIFIED
-            return ["I found this message:", "```" + message.author.name + ": " + message.content + "```", \
-                    "This is all I know how to do right now - it's up to you to build out the rest of my reporting flow!"]
-        
+            
         if self.state == State.MESSAGE_IDENTIFIED:
-            return ["<insert rest of reporting flow here>"]
+            reply = "I found this message:", "```" + message.author.name + ": " + message.content + "```"
+            
+            embed = discord.Embed(
+                color = discord.Colour.dark_blue(),
+                title="Please choose the category of disinformation that best describes your reason for reporting"
+            )
 
-        return []
+            embed.add_field(
+                name="(1)",
+                value="False/misleading information",
+                inline=False
+            )
+
+            embed.add_field(
+                name="(2)",
+                value="Harassment and Bullying",
+                inline=False
+            )
+
+            embed.add_field(
+                name="(3)",
+                value="Fraud and Scams",
+                inline=False
+            )
+
+            embed.add_field(
+                name="(4)",
+                value="Violent and Harmful content",
+                inline=False
+            )
+
+            embed.set_footer(text="Please type the number corresponding to the category.")
+            self.state = State.CHOOSE_CATEGORY
+
+            return [{"content":reply, "embed":embed}]
+        
+        # if self.state == State.CHOOSE_CATEGORY:
+        #     if message.content not in ABUSE_TYPES:
+        
 
     def report_complete(self):
         return self.state == State.REPORT_COMPLETE
