@@ -8,6 +8,14 @@ class State(Enum):
     MESSAGE_IDENTIFIED = auto()
     REPORT_COMPLETE = auto()
     CHOOSE_CATEGORY = auto()
+    # CHOOSE_TYPE1 = auto()
+    # CHOOSE_TYPE2 = auto()
+    # CHOOSE_TYPE3 = auto()
+    # CHOOSE_TYPE4 = auto()
+    # GIVE_CONTEXT = auto()
+    # USER_INPUT = auto()
+    # BLOCK_STATE = auto()
+
 
 class Report:
     START_KEYWORD = "report"
