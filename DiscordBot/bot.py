@@ -107,7 +107,10 @@ class ModBot(discord.Client):
         # If the report is complete or cancelled, remove it from our map
         if self.reports[author_id].report_complete() or self.reports[author_id].report_escalated():
             # TODO: notify reporter
-            # TODO: send summary to mod channel
+            mod_channel = discord.utils.get(
+                self.get_all_channels(),
+                name=f'group-{self.group_num}-mod') 
+            await mod_channel.send(self.mod_summary(author_id, self.reports[author_id]))
             self.reports.pop(author_id)
 
 
@@ -142,6 +145,13 @@ class ModBot(discord.Client):
         shown in the mod channel. 
         '''
         return "Evaluated: '" + text+ "'"
+
+
+    def mod_summary(self, user_id, report):
+        summary = '**MODERATION UPDATE**\n'
+        summary += f'- Reporting user [{user_id}]\n'
+        summary += f'{report.report_summary()}\n'
+        return summary
 
 
 client = ModBot()

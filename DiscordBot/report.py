@@ -90,7 +90,9 @@ class Report:
                 return ["It seems this message was deleted or never existed. Please try again or say `cancel` to cancel."]
 
             # Here we've found the message - it's up to you to decide what to do next!
-            self.message = f'REPORT [from: {message.author.name}]\n- Content: {message.content}\n'
+            self.message = '-' * 50 + '\n'
+            self.message += f'REPORT [from: {message.author.name}]\nContent:\n```{message.content}```'
+            self.message += '-' * 50 + '\n'
             self.state = State.MESSAGE_IDENTIFIED
             return ["I found this message:", "```" + message.author.name + ": " + message.content + "```", \
                     "This is all I know how to do right now - it's up to you to build out the rest of my reporting flow!"]
@@ -185,3 +187,7 @@ class Report:
 
     def report_escalated(self):
         return self.state in [State.EMERGENCY, State.HIGHER_LEVEL_MOD]
+
+
+    def report_summary(self):
+        return f'- Status [{self.state}]\n{self.message}'
