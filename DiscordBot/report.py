@@ -13,16 +13,21 @@ class State(Enum):
     CHOOSE_TYPE4 = auto()
     # PROVIDE_CONTEXT = auto()
     # USER_INPUT = auto()
-    # BLOCK_STATE = auto()
+    BLOCK_STATE = auto()
     REPORT_COMPLETE = auto()
+    ADDITIONAL_INFORMATION = auto()
+
 
 
 class Report:
     START_KEYWORD = "report"
     CANCEL_KEYWORD = "cancel"
     HELP_KEYWORD = "help"
+    NUM_REPORTS = 0
+    REPORTS = []
 
     ABUSE_TYPES = ['1', '2', '3', '4']
+    YES_NO = ['1', '2']
 
     def __init__(self, client):
         self.state = State.REPORT_START
@@ -124,8 +129,44 @@ class Report:
                 reply = ""
                 embed = Report.type4_embed()
             return [{"content":reply, "embed":embed}]
-
         
+        if self.state == State.CHOOSE_TYPE1:
+            self.state = State.ADDITIONAL_INFORMATION
+            embed = discord.Embed(
+                color = discord.Colour.dark_blue(),
+                title="Would you be able to provide additional information about this disinformation?"
+            )
+
+            embed.add_field(
+                name = "1",
+                value = "Yes. I have additional information to provide",
+                inline = False
+            )
+
+            embed.add_field(
+                name = "2",
+                value = "No. I do not have additional information to provide",
+                inline = False
+            )
+
+            embed.set_footer(text="Ex: To provide additional information, type `1`.")
+            return [{"content":reply, "embed":embed}]
+        
+        if self.state != State.CHOOSE_TYPE1:
+            self.state = State.BLOCK_STATE
+        
+        if self.state == State.ADDITIONAL_INFORMATION:
+            if message.content not in self.YES_NO:
+                return ["Unrecognized option. Please choose from the above options."]
+            elif message.content == "1":
+                msg = await self.client.wait_for("message")
+                if msg:
+                    self.REPORTS.append(msg)
+                    self.NUM_REPORTS += 1
+                self.state = State.BLOCK_STATE
+                return ["Thank you for your report!"]
+            elif message.content == "2":
+                self.state = State.BLOCK_STATE
 
     def report_complete(self):
         return self.state == State.REPORT_COMPLETE
@@ -222,3 +263,6 @@ class Report:
 
     
 
+# git add .
+# git commit -m ""
+# git push origin branchname
