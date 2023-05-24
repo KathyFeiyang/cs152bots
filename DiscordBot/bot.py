@@ -33,7 +33,11 @@ class ModBot(discord.Client):
         super().__init__(command_prefix='.', intents=intents)
         self.group_num = None
         self.mod_channels = {} # Map from guild to the mod channel id for that guild
+        # TODO: order reports by priority
         self.reports = {} # Map from user IDs to the state of their report
+        # TODO: manage moderator - report assignments
+        self.moderator_assignments = {}
+
 
     async def on_ready(self):
         print(f'{self.user.name} has connected to Discord! It is these guilds:')
@@ -68,13 +72,16 @@ class ModBot(discord.Client):
         if message.guild:
             await self.handle_channel_message(message)
         else:
+            # TODO: check moderator identity
             await self.handle_dm(message)
+
 
     async def handle_dm(self, message):
         # Handle a help message
         if message.content == Report.HELP_KEYWORD:
             reply =  "Use the `report` command to begin the reporting process.\n"
             reply += "Use the `cancel` command to cancel the report process.\n"
+            reply += "[Moderators] Use the `moderate` command to begin the moderation process.\n"
             await message.channel.send(reply)
             return
 
@@ -84,6 +91,9 @@ class ModBot(discord.Client):
         # Only respond to messages if they're part of a reporting flow
         if author_id not in self.reports and not message.content.startswith(Report.START_KEYWORD):
             return
+
+        # TODO: support reporting of users, in addition to content
+        # TODO: add moderation for reporters
 
         # If we don't currently have an active report for this user, add one
         if author_id not in self.reports:
@@ -95,8 +105,11 @@ class ModBot(discord.Client):
             await message.channel.send(r)
 
         # If the report is complete or cancelled, remove it from our map
-        if self.reports[author_id].report_complete():
+        if self.reports[author_id].report_complete() or self.reports[author_id].report_escalated():
+            # TODO: notify reporter
+            # TODO: send summary to mod channel
             self.reports.pop(author_id)
+
 
     async def handle_channel_message(self, message):
         # Only handle messages sent in the "group-#" channel
@@ -115,7 +128,11 @@ class ModBot(discord.Client):
         TODO: Once you know how you want to evaluate messages in your channel, 
         insert your code here! This will primarily be used in Milestone 3. 
         '''
-        return message
+        # TODO: swap with model
+        if 'disinformation' in message.lower():
+            return 1
+        else:
+            return 0
 
     
     def code_format(self, text):
