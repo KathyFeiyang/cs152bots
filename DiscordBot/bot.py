@@ -25,6 +25,12 @@ with open(token_path) as f:
     tokens = json.load(f)
     discord_token = tokens['discord']
 
+MODERATOR_LIST_PATH = 'moderators.json'
+if not os.path.isfile(MODERATOR_LIST_PATH):
+    raise Exception(f"{MODERATOR_LIST_PATH} not found!")
+with open(MODERATOR_LIST_PATH) as f:
+    moderators = json.load(f)
+
 
 class ModBot(discord.Client):
     def __init__(self): 
@@ -36,6 +42,7 @@ class ModBot(discord.Client):
         # TODO: order reports by priority
         self.reports = {} # Map from user IDs to the state of their report
         # TODO: manage moderator - report assignments
+        self.moderators = moderators
         self.moderator_assignments = {}
 
 
@@ -72,46 +79,74 @@ class ModBot(discord.Client):
         if message.guild:
             await self.handle_channel_message(message)
         else:
-            # TODO: check moderator identity
             await self.handle_dm(message)
 
 
-    async def handle_dm(self, message):
-        # Handle a help message
-        if message.content == Report.HELP_KEYWORD:
-            reply =  "Use the `report` command to begin the reporting process.\n"
-            reply += "Use the `cancel` command to cancel the report process.\n"
-            reply += "[Moderators] Use the `moderate` command to begin the moderation process.\n"
-            await message.channel.send(reply)
-            return
-
-        author_id = message.author.id
-        responses = []
-
-        # Only respond to messages if they're part of a reporting flow
-        if author_id not in self.reports and not message.content.startswith(Report.START_KEYWORD):
-            return
-
-        # TODO: support reporting of users, in addition to content
-        # TODO: add moderation for reporters
-
-        # If we don't currently have an active report for this user, add one
-        if author_id not in self.reports:
-            self.reports[author_id] = Report(self)
-
+    async def process_message(self, message, author_id):
         # Let the report class handle this message; forward all the messages it returns to uss
         responses = await self.reports[author_id].handle_message(message)
         for r in responses:
             await message.channel.send(r)
 
-        # If the report is complete or cancelled, remove it from our map
-        if self.reports[author_id].report_complete() or self.reports[author_id].report_escalated():
-            # TODO: notify reporter
-            mod_channel = discord.utils.get(
-                self.get_all_channels(),
-                name=f'group-{self.group_num}-mod') 
-            await mod_channel.send(self.mod_summary(author_id, self.reports[author_id]))
-            self.reports.pop(author_id)
+
+    async def handle_dm(self, message):
+        # Handle a help message
+        if message.content == Report.HELP_KEYWORD:
+            reply =  "- Use the `report` command to begin the reporting process.\n"
+            reply += "- Use the `cancel` command to cancel the report process.\n"
+            reply += "- [Moderators] Use the `moderate` command to begin the moderation process.\n"
+            reply += "- [Moderators] Start with `as user:` to act as a regular user.\n"
+            await message.channel.send(reply)
+            return
+
+        author_id = str(message.author.id)
+
+        # Only respond to messages if they're part of a reporting or moderator flow
+        if ((author_id not in self.reports and not message.content.startswith(Report.START_KEYWORD)) and
+            (author_id not in self.moderators and not message.content.startswith(Report.MOD_START_KEYWORD))):
+            return
+
+        if author_id in self.moderators and not message.content.startswith(Report.USER_OVERRIDE):
+            print('running as mod')
+            if author_id in self.moderator_assignments:
+                await message.channel.send('`...ongoing moderation...`')
+            else:
+                if len(self.reports) == 0:
+                    await message.channel.send(
+                        'There are no active reports to moderate. Thank you for checking.')
+                    return
+                else:
+                    self.moderator_assignments[author_id] = next(iter(self.reports.keys()))
+            await self.process_message(
+                message=message,
+                author_id=self.moderator_assignments[author_id])
+            # If the report is complete or cancelled, remove it from our map
+            if (self.reports[self.moderator_assignments[author_id]].report_complete()
+                or self.reports[self.moderator_assignments[author_id]].report_escalated()):
+                # TODO: notify reporter
+                mod_channel = discord.utils.get(
+                    self.get_all_channels(),
+                    name=f'group-{self.group_num}-mod') 
+                await mod_channel.send(self.mod_summary(
+                    self.moderator_assignments[author_id],
+                    self.reports[self.moderator_assignments[author_id]]))
+                self.reports.pop(self.moderator_assignments[author_id])
+                self.moderator_assignments.pop(author_id)
+        else:
+            print('running as user')
+            if author_id in self.moderators and message.content.startswith(Report.USER_OVERRIDE):
+                message.content = message.content.split(Report.USER_OVERRIDE)[-1].strip()
+            print('message content in reporting flow:', message.content)
+            # If we don't currently have an active report for this user, add one
+            if author_id not in self.reports and not message.content.startswith(Report.START_KEYWORD):
+                return
+            if author_id not in self.reports and message.content.startswith(Report.START_KEYWORD):
+                self.reports[author_id] = Report(self)
+            await self.process_message(
+                message=message,
+                author_id=author_id)
+            # TODO: support reporting of users, in addition to content
+            # TODO: add moderation for reporters
 
 
     async def handle_channel_message(self, message):

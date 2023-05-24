@@ -20,6 +20,7 @@ class Report:
     START_KEYWORD = "report"
     CANCEL_KEYWORD = "cancel"
     HELP_KEYWORD = "help"
+    USER_OVERRIDE = "as user:"
 
     # Moderation
     MOD_START_KEYWORD = 'moderate'
@@ -113,7 +114,7 @@ class Report:
 
         if self.state == State.MOD_START:
             if message.content.lower() in ['yes', 'y']:
-                reply = '`<Escalated to emergency status>`'
+                reply = 'Report `<escalated to emergency status>`. Thank you.'
                 self.state = State.EMERGENCY
             else:
                 reply = (
@@ -125,7 +126,7 @@ class Report:
 
         if self.state == State.MOD_1:
             if message.content.lower() in ['uncertain', 'u']:
-                reply = '`<Escalated to higher level moderators>`'
+                reply = 'Report `<escalated to higher level moderators>`. Thank you'
                 self.state = State.HIGHER_LEVEL_MOD
             elif message.content.lower() in ['no', 'n']:
                 reply = 'Report resolved. Thank you.'
