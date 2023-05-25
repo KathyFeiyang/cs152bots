@@ -11,9 +11,8 @@ class State(Enum):
     CHOOSE_TYPE2 = auto()
     CHOOSE_TYPE3 = auto()
     CHOOSE_TYPE4 = auto()
-    # PROVIDE_CONTEXT = auto()
-    # USER_INPUT = auto()
     BLOCK_STATE = auto()
+    IN_REVIEW_STATE = auto()
     REPORT_COMPLETE = auto()
     MOD_START = auto()
     MOD_1 = auto()
@@ -69,7 +68,45 @@ class Report:
         self.state = State.REPORT_START
         self.client = client
         self.message = None
-    
+
+
+    def run_block_state(self):
+        reply = ""
+
+        embed = discord.Embed(
+            color=discord.Colour.dark_blue(),
+            title="Would you like to block the content or user?"
+        )
+
+        embed.add_field(
+            name="(1)",
+            value="Block user",
+            inline=False
+        )
+
+        embed.add_field(
+            name="(2)",
+            value="Block content",
+            inline=False
+        )
+
+        embed.add_field(
+            name="(3)",
+            value="Block user and content",
+            inline=False
+        )
+
+        embed.add_field(
+            name="(4)",
+            value="Do not block",
+            inline=False
+        )
+
+        embed.set_footer(text="Please type the number corresponding to your choice.")
+
+        return [{"content": reply, "embed": embed}]
+
+
     async def handle_message(self, message):
         '''
         This function makes up the meat of the user-side reporting flow. It defines how we transition between states and what 
@@ -81,7 +118,7 @@ class Report:
             self.state = State.REPORT_COMPLETE
             return ["Report cancelled."]
         
-        if self.state == State.REPORT_START:
+        elif self.state == State.REPORT_START:
             reply =  "Thank you for starting the reporting process. "
             reply += "Say `help` at any time for more information.\n\n"
             reply += "Please copy paste the link to the message you want to report.\n"
@@ -89,7 +126,7 @@ class Report:
             self.state = State.AWAITING_MESSAGE
             return [reply]
         
-        if self.state == State.AWAITING_MESSAGE:
+        elif self.state == State.AWAITING_MESSAGE:
             # Parse out the three ID strings from the message link
             m = re.search('/(\d+)/(\d+)/(\d+)', message.content)
             if not m:
@@ -114,7 +151,7 @@ class Report:
                 "```" + message.author.name + ": " + message.content + "```",
                 "Is this correct? Please answer `Yes` or `No`"]
 
-        if self.state == State.MESSAGE_IDENTIFIED:
+        elif self.state == State.MESSAGE_IDENTIFIED:
             reply = "Here is the reported message:\n" + "```" + message.author.name + ": " + message.content + "```"
 
             if message.content.lower() in ['no', 'n']:
@@ -154,7 +191,7 @@ class Report:
 
             return [{"content": reply, "embed": embed}]
 
-        if self.state == State.CATEGORY_CHOSEN:
+        elif self.state == State.CATEGORY_CHOSEN:
             if message.content not in self.ABUSE_TYPES:
                 return ["Unrecognized option. Please choose from the above options."]
             if message.content == "1":
@@ -178,13 +215,13 @@ class Report:
             
             return [{"content": reply, "embed": embed}]
 
-        if message.content != self.MOD_START_KEYWORD and self.state in [
-                State.CHOOSE_TYPE2, State.CHOOSE_TYPE3, State.CHOOSE_TYPE4]:
+        elif self.state in [State.CHOOSE_TYPE2, State.CHOOSE_TYPE3, State.CHOOSE_TYPE4]:
             self.message += f'[C2={message.content}]'
-            self.message += '-' * 50 + '\n'
-            return ['We\'ve received your report! Our content moderation team will promptly review the report.']
-        
-        if message.content != self.MOD_START_KEYWORD and self.state == State.CHOOSE_TYPE1:
+            self.state = State.BLOCK_STATE
+            return self.run_block_state()
+
+        elif self.state == State.CHOOSE_TYPE1:
+            self.message += f'[C2={message.content}]'
             self.state = State.ADDITIONAL_INFORMATION
             embed = discord.Embed(
                 color = discord.Colour.dark_blue(),
@@ -209,24 +246,44 @@ class Report:
             reply = ""
             return [{"content": reply, "embed": embed}]
         
-        if self.state == State.ADDITIONAL_INFORMATION:
+        elif self.state == State.ADDITIONAL_INFORMATION:
             if message.content not in self.YES_NO:
                 return ["Unrecognized option. Please choose from the above options."]
             elif message.content.startswith("1"):
                 msg = await self.client.wait_for("message")
                 if msg:
-                    self.message += f'Additional information: {msg}'
+                    self.message += f'\nAdditional information: {msg}'
                     self.REPORTS.append(msg)
                     self.NUM_REPORTS += 1
             self.state = State.BLOCK_STATE
-            return ["Thank you for your report! We've received your report! Our content moderation team will promptly review the report."]
+            return self.run_block_state()
 
-        elif message.content != self.MOD_START_KEYWORD and self.state in [
-                State.CHOOSE_TYPE1, State.CHOOSE_TYPE2, State.CHOOSE_TYPE3, State.CHOOSE_TYPE4, State.BLOCK_STATE]:
+        elif self.state == State.BLOCK_STATE:
+            reply = None
+            if message.content in self.ABUSE_TYPES:
+                self.state = State.IN_REVIEW_STATE
+                if message.content == '1':
+                    reply = "The user was successfully blocked."
+                elif message.content == '2':
+                    reply = "The content was successfully blocked."
+                elif message.content == '3':
+                    reply = "The user and content were successfully blocked"
+                else:
+                    reply = "Neither the user nor content was blocked."
+                self.message += f'\nReporting user action: {reply}'
+                self.message += '-' * 50 + '\n'
+                reply += "\nWe've received your report! " \
+                    "Thank you for taking the time to help keep our community safe and truthful." \
+                    " Our content moderation team will promptly review the report."
+            else:  # In case the input is not within the ABUSE_TYPES
+                reply = "Please choose a valid option by typing the corresponding number (1, 2, 3, or 4)."
+
+            return [reply]
+
+        elif message.content != self.MOD_START_KEYWORD and self.state == State.IN_REVIEW_STATE:
             return ["Your report is currently under review. We will update you on the status of the report promptly."]
 
-        if message.content == self.MOD_START_KEYWORD and self.state in [
-                State.CHOOSE_TYPE1, State.CHOOSE_TYPE2, State.CHOOSE_TYPE3, State.CHOOSE_TYPE4, State.BLOCK_STATE]:
+        elif message.content == self.MOD_START_KEYWORD and self.state == State.IN_REVIEW_STATE:
             reply = (
                 'Thank you for starting the moderation process\n'
                 f'Here is a summary of the report:\n\n{self.message}\n'
@@ -236,7 +293,7 @@ class Report:
             self.state = State.MOD_START
             return [reply]
 
-        if self.state == State.MOD_START:
+        elif self.state == State.MOD_START:
             if message.content.lower() in ['yes', 'y']:
                 reply = 'Report `<escalated to emergency status>`. Thank you.'
                 self.state = State.EMERGENCY
@@ -248,7 +305,7 @@ class Report:
                 self.state = State.MOD_1
             return [reply]
 
-        if self.state == State.MOD_1:
+        elif self.state == State.MOD_1:
             if message.content.lower() in ['uncertain', 'u']:
                 reply = 'Report `<escalated to higher level moderators>`. Thank you'
                 self.state = State.HIGHER_LEVEL_MOD
@@ -264,7 +321,7 @@ class Report:
                 self.state = State.MOD_2
             return [reply]
 
-        if self.state == State.MOD_2:
+        elif self.state == State.MOD_2:
             # TODO: Parse response and store in database
             reply = (
                 'Q: Who is the most likely actor of this disinformation\n'
@@ -274,7 +331,7 @@ class Report:
             self.state = State.MOD_3
             return [reply]
 
-        if self.state == State.MOD_3:
+        elif self.state == State.MOD_3:
             # TODO: Parse response and store in database
             reply = (
                 'Q: What is the severity of this disinformation and what action'
@@ -285,7 +342,7 @@ class Report:
             self.state = State.MOD_4
             return [reply]
 
-        if self.state == State.MOD_4:
+        elif self.state == State.MOD_4:
             # TODO: Parse response and store in database
             # TODO: Flag or remove content / ban user account
             if '1' in message.content:
