@@ -70,6 +70,7 @@ class Report:
         self.message_obj = None
         self.reporting_user_id = None
         self.false_reporting = False
+        self.final_action = ''
 
 
     def run_block_state(self):
@@ -118,6 +119,7 @@ class Report:
 
         if message.content == self.CANCEL_KEYWORD:
             self.state = State.REPORT_COMPLETE
+            self.final_action = 'Report canceled.'
             return ["Report cancelled."]
         
         elif self.state == State.REPORT_START:
@@ -317,6 +319,7 @@ class Report:
                 reply = 'Report resolved. Thank you.'
                 self.false_reporting = True
                 self.state = State.REPORT_COMPLETE
+                self.final_action = 'Report was determined to be not disinformation.'
             else:
                 reply = (
                     'Q: What category does this disinformation belong to?\n'
@@ -352,15 +355,19 @@ class Report:
             if '1' in message.content:
                 await self.message_obj.delete()
                 reply = ''
+                self.final_action = 'disinformation content removed'
             elif '2' in message.content:
                 await self.message_obj.delete()
                 reply = '`<User temporarily forbidden from making posts>`\n'
+                self.final_action = 'disinformation content removed and user temporarily forbidden from making posts'
             elif '3' in message.content:
                 await self.message_obj.delete()
                 reply = '`<User account temporarily suspended>`\n'
+                self.final_action = 'disinformation content removed and user account temporarily suspended'
             else:
                 await self.message_obj.delete()
                 reply = '`<User account removed>`\n'
+                self.final_action = f'disinformation content removed and user account removed'
             reply += (
                 'Thank you for handling this report.\n'
                 'The report is resolved and the neccesary measures taken.'

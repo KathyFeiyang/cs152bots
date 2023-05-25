@@ -161,7 +161,7 @@ class ModBot(discord.Client):
                 or self.reports[self.moderator_assignments[author_id]].report_escalated()):
                 reporting_user = await self.fetch_user(int(self.moderator_assignments[author_id]))
                 await reporting_user.send((
-                    f'Your earlier report has been resolved: {self.reports[self.moderator_assignments[author_id]].state}'))
+                    f'Your earlier report has been resolved: {self.reports[self.moderator_assignments[author_id]].final_action}'))
                 mod_channel = discord.utils.get(
                     self.get_all_channels(),
                     name=f'group-{self.group_num}-mod') 
