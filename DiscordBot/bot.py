@@ -10,6 +10,7 @@ import re
 import requests
 from report import Report
 import pdb
+import random
 
 # Set up logging to the console
 logger = logging.getLogger('discord')
@@ -36,6 +37,27 @@ with open(MODERATOR_LIST_PATH) as f:
 
 FALSE_REPORTING_LIMIT = 1
 
+# Simple priority queue implementation to rank reports by urgency 1-10
+class PriorityQueue:
+    def __init__(self):
+        self.queue = []
+
+    def is_empty(self):
+        return len(self.queue) == 0
+
+    def enqueue(self, item, priority):
+        self.queue.append((item, priority))
+        self.queue.sort(key=lambda x: x[1], reverse=True)
+
+    def dequeue(self):
+        if self.is_empty():
+            raise Exception("Priority queue is empty.")
+        return self.queue.pop(0)[0]
+
+    def peek(self):
+        if self.is_empty():
+            raise Exception("Priority queue is empty.")
+        return self.queue[0][0]
 
 class ModBot(discord.Client):
     def __init__(self): 
@@ -44,7 +66,8 @@ class ModBot(discord.Client):
         super().__init__(command_prefix='.', intents=intents)
         self.group_num = None
         self.mod_channels = {} # Map from guild to the mod channel id for that guild
-        # TODO: order reports by priority
+        self.high_priority_queue = PriorityQueue()
+        self.low_priority_queue = PriorityQueue() #Order reports by priority
         self.reports = {} # Map from user IDs to the state of their report
         # TODO: manage moderator - report assignments
         self.moderators = moderators
@@ -120,12 +143,16 @@ class ModBot(discord.Client):
             if author_id in self.moderator_assignments:
                 await message.channel.send('`...ongoing moderation...`')
             else:
-                if len(self.reports) == 0:
+                # Get next report with highest priority
+                if not self.high_priority_queue.is_empty:
+                    next_report = self.high_priority_queue.dequeue
+                else if not self.low_priority_queue.is_empty:
+                    next_report = self.low_priority_queue.dequeue
+                else:
                     await message.channel.send(
                         'There are no active reports to moderate. Thank you for checking.')
                     return
-                else:
-                    self.moderator_assignments[author_id] = next(iter(self.reports.keys()))
+                self.moderator_assignments[author_id] = next_report
             await self.process_message(
                 message=message,
                 author_id=self.moderator_assignments[author_id])
@@ -158,6 +185,8 @@ class ModBot(discord.Client):
             if author_id not in self.reports and message.content.startswith(Report.START_KEYWORD):
                 if len(self.false_report_history[author_id]) < FALSE_REPORTING_LIMIT:
                     self.reports[author_id] = Report(self)
+                   # Generate a priority and assign to appropriate queue
+                    self.assign_report_priority(self.reports[author_id])
                 else:
                     await message.channel.send(
                         'You are temporarily suspended from making reports because you have made too many false reports recently.'
@@ -180,6 +209,12 @@ class ModBot(discord.Client):
         scores = self.eval_text(message.content)
         await mod_channel.send(self.code_format(scores))
 
+    def assign_report_priority(report):
+        priority = random.randint(1, 10)
+        if priority <= 5:
+            self.low_priority_queue.enqueue(report, priority)
+        else:
+            self.high_priority_queue.enqueue(report, priority)
     
     def eval_text(self, message):
         ''''
