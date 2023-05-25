@@ -270,7 +270,7 @@ class Report:
                     reply = "The user and content were successfully blocked"
                 else:
                     reply = "Neither the user nor content was blocked."
-                self.message += f'\nReporting user action: {reply}'
+                self.message += f'\nReporting user action: {reply}\n'
                 self.message += '-' * 50 + '\n'
                 reply += "\nWe've received your report! " \
                     "Thank you for taking the time to help keep our community safe and truthful." \
