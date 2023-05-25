@@ -132,7 +132,9 @@ class ModBot(discord.Client):
             # If the report is complete or cancelled, remove it from our map
             if (self.reports[self.moderator_assignments[author_id]].report_complete()
                 or self.reports[self.moderator_assignments[author_id]].report_escalated()):
-                # TODO: notify reporter
+                reporting_user = await self.fetch_user(int(self.moderator_assignments[author_id]))
+                await reporting_user.send((
+                    f'Your earlier report has been resolved: {self.reports[self.moderator_assignments[author_id]].state}'))
                 mod_channel = discord.utils.get(
                     self.get_all_channels(),
                     name=f'group-{self.group_num}-mod') 
@@ -159,7 +161,7 @@ class ModBot(discord.Client):
                 else:
                     await message.channel.send(
                         'You are temporarily suspended from making reports because you have made too many false reports recently.'
-                        ' We apologize for the inconveninence.')
+                        ' We apologize for the inconveninence. If you believe this is a mistake, please contact us at XXX-XXX-XXXX.')
                     return
             await self.process_message(
                 message=message,
