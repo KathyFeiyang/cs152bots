@@ -68,6 +68,8 @@ class Report:
         self.client = client
         self.message = None
         self.message_obj = None
+        self.reporting_user_id = None
+        self.false_reporting = False
 
 
     def run_block_state(self):
@@ -124,6 +126,7 @@ class Report:
             reply += "Please copy paste the link to the message you want to report.\n"
             reply += "You can obtain this link by right-clicking the message and clicking `Copy Message Link`."
             self.state = State.AWAITING_MESSAGE
+            self.reporting_user_id = message.author.id
             return [reply]
         
         elif self.state == State.AWAITING_MESSAGE:
@@ -312,6 +315,7 @@ class Report:
                 self.state = State.HIGHER_LEVEL_MOD
             elif message.content.lower() in ['no', 'n']:
                 reply = 'Report resolved. Thank you.'
+                self.false_reporting = True
                 self.state = State.REPORT_COMPLETE
             else:
                 reply = (
@@ -482,3 +486,11 @@ class Report:
 
     def report_summary(self):
         return f'- Status [{self.state}]\n{self.message}'
+
+
+    def report_stats(self):
+        return {
+            'reported_user': self.message_obj.author.id,
+            'reporting_user': self.reporting_user_id,
+            'false_reporting': self.false_reporting,
+        }

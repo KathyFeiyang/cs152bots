@@ -1,4 +1,6 @@
 # bot.py
+from collections import defaultdict
+from datetime import datetime
 import discord
 from discord.ext import commands
 import os
@@ -32,6 +34,9 @@ with open(MODERATOR_LIST_PATH) as f:
     moderators = json.load(f)
 
 
+FALSE_REPORTING_LIMIT = 1
+
+
 class ModBot(discord.Client):
     def __init__(self): 
         intents = discord.Intents.default()
@@ -44,6 +49,7 @@ class ModBot(discord.Client):
         # TODO: manage moderator - report assignments
         self.moderators = moderators
         self.moderator_assignments = {}
+        self.false_report_history = defaultdict(list)
 
 
     async def on_ready(self):
@@ -133,23 +139,32 @@ class ModBot(discord.Client):
                 await mod_channel.send(self.mod_summary(
                     self.moderator_assignments[author_id],
                     self.reports[self.moderator_assignments[author_id]]))
+                stats = self.reports[self.moderator_assignments[author_id]].report_stats()
+                if stats['false_reporting']:
+                    self.false_report_history[str(stats['reporting_user'])].append(datetime.now())
+                    print(stats)
                 self.reports.pop(self.moderator_assignments[author_id])
                 self.moderator_assignments.pop(author_id)
         else:
             print('running as user')
             if author_id in self.moderators and message.content.startswith(Report.USER_OVERRIDE):
                 message.content = message.content.split(Report.USER_OVERRIDE)[-1].strip()
-            print('message content in reporting flow:', message.content)
+            # print('message content in reporting flow:', message.content)
             # If we don't currently have an active report for this user, add one
             if author_id not in self.reports and not message.content.startswith(Report.START_KEYWORD):
                 return
             if author_id not in self.reports and message.content.startswith(Report.START_KEYWORD):
-                self.reports[author_id] = Report(self)
+                if len(self.false_report_history[author_id]) < FALSE_REPORTING_LIMIT:
+                    self.reports[author_id] = Report(self)
+                else:
+                    await message.channel.send(
+                        'You are temporarily suspended from making reports because you have made too many false reports recently.'
+                        ' We apologize for the inconveninence.')
+                    return
             await self.process_message(
                 message=message,
                 author_id=author_id)
             # TODO: support reporting of users, in addition to content
-            # TODO: add moderation for reporters
 
 
     async def handle_channel_message(self, message):
@@ -169,7 +184,7 @@ class ModBot(discord.Client):
         TODO: Once you know how you want to evaluate messages in your channel, 
         insert your code here! This will primarily be used in Milestone 3. 
         '''
-        # TODO: swap with model
+        # TODO: swap with model in milestone 3
         if 'disinformation' in message.lower():
             return 1
         else:
