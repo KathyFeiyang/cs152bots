@@ -52,11 +52,10 @@ class Report:
         '8. Other',
     ]
     DISINFO_ACTIONS = [
-        '1. Attach disinformation warning to content and alert user',
-        '2. Remove content and alert user',
-        '3. Remove content and temporarily forbid users from making posts',
-        '4. Remove content and temporarily suspend user account',
-        '5. Remove content and remove user account',
+        '1. Remove content',
+        '2. Remove content and temporarily forbid users from making posts',
+        '3. Remove content and temporarily suspend user account',
+        '4. Remove content and remove user account',
     ]
     NUM_REPORTS = 0
     REPORTS = []
@@ -68,6 +67,7 @@ class Report:
         self.state = State.REPORT_START
         self.client = client
         self.message = None
+        self.message_obj = None
 
 
     def run_block_state(self):
@@ -145,6 +145,7 @@ class Report:
             # Here we've found the message - it's up to you to decide what to do next!
             self.message = '-' * 50 + '\n'
             self.message += f'REPORT [from: {message.author.name}]\nContent:\n```{message.content}```'
+            self.message_obj = message
             self.state = State.MESSAGE_IDENTIFIED
             return [
                 "I found this message:",
@@ -252,7 +253,7 @@ class Report:
             elif message.content.startswith("1"):
                 msg = await self.client.wait_for("message")
                 if msg:
-                    self.message += f'\nAdditional information: {msg}'
+                    self.message += f'\nAdditional information: {msg.content}'
                     self.REPORTS.append(msg)
                     self.NUM_REPORTS += 1
             self.state = State.BLOCK_STATE
@@ -344,18 +345,19 @@ class Report:
 
         elif self.state == State.MOD_4:
             # TODO: Parse response and store in database
-            # TODO: Flag or remove content / ban user account
             if '1' in message.content:
-                pass
+                await self.message_obj.delete()
+                reply = ''
             elif '2' in message.content:
-                pass
+                await self.message_obj.delete()
+                reply = '`<User temporarily forbidden from making posts>`\n'
             elif '3' in message.content:
-                pass
-            elif '4' in message.content:
-                pass
+                await self.message_obj.delete()
+                reply = '`<User account temporarily suspended>`\n'
             else:
-                pass
-            reply = (
+                await self.message_obj.delete()
+                reply = '`<User account removed>`\n'
+            reply += (
                 'Thank you for handling this report.\n'
                 'The report is resolved and the neccesary measures taken.'
             )
