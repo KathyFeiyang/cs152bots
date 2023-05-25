@@ -7,14 +7,13 @@ class State(Enum):
     AWAITING_MESSAGE = auto()
     MESSAGE_IDENTIFIED = auto()
     CATEGORY_CHOSEN = auto()
-    CATEGORY_L2_CHOSEN = auto()
     CHOOSE_TYPE1 = auto()
     CHOOSE_TYPE2 = auto()
     CHOOSE_TYPE3 = auto()
     CHOOSE_TYPE4 = auto()
     # PROVIDE_CONTEXT = auto()
     # USER_INPUT = auto()
-    # BLOCK_STATE = auto()
+    BLOCK_STATE = auto()
     REPORT_COMPLETE = auto()
     MOD_START = auto()
     MOD_1 = auto()
@@ -23,6 +22,7 @@ class State(Enum):
     MOD_4 = auto()
     EMERGENCY = auto()
     HIGHER_LEVEL_MOD = auto()
+    ADDITIONAL_INFORMATION = auto()
 
 
 class Report:
@@ -59,8 +59,11 @@ class Report:
         '4. Remove content and temporarily suspend user account',
         '5. Remove content and remove user account',
     ]
+    NUM_REPORTS = 0
+    REPORTS = []
 
     ABUSE_TYPES = ['1', '2', '3', '4']
+    YES_NO = ['1', '2']
 
     def __init__(self, client):
         self.state = State.REPORT_START
@@ -154,7 +157,7 @@ class Report:
         if self.state == State.CATEGORY_CHOSEN:
             if message.content not in self.ABUSE_TYPES:
                 return ["Unrecognized option. Please choose from the above options."]
-            elif message.content == "1":
+            if message.content == "1":
                 self.state = State.CHOOSE_TYPE1
                 reply = ""
                 embed = Report.type1_embed()
@@ -170,16 +173,60 @@ class Report:
                 self.state = State.CHOOSE_TYPE4
                 reply = ""
                 embed = Report.type4_embed()
+
             self.message += f"[C1={message.content}]"
-            self.state = State.CATEGORY_L2_CHOSEN
+            
             return [{"content": reply, "embed": embed}]
 
-        if message.content != self.MOD_START_KEYWORD and self.state == State.CATEGORY_L2_CHOSEN:
+        if message.content != self.MOD_START_KEYWORD and self.state in [
+                State.CHOOSE_TYPE2, State.CHOOSE_TYPE3, State.CHOOSE_TYPE4]:
             self.message += f'[C2={message.content}]'
             self.message += '-' * 50 + '\n'
-            return ['Thank you for filling out the report.']
+            return ['We\'ve received your report! Our content moderation team will promptly review the report.']
+        
+        if message.content != self.MOD_START_KEYWORD and self.state == State.CHOOSE_TYPE1:
+            self.state = State.ADDITIONAL_INFORMATION
+            embed = discord.Embed(
+                color = discord.Colour.dark_blue(),
+                title="Would you be able to provide additional information about this disinformation?"
+            )
 
-        if message.content == self.MOD_START_KEYWORD and self.state == State.CATEGORY_L2_CHOSEN:
+            embed.add_field(
+                name = "1",
+                value = "Yes. I have additional information to provide",
+                inline = False
+            )
+
+            embed.add_field(
+                name = "2",
+                value = "No. I do not have additional information to provide",
+                inline = False
+            )
+
+            embed.set_footer(
+                text=("Ex: To provide additional information, type `1` and hit ENTER."
+                      "Then provide the additional information in text in the next message."))
+            reply = ""
+            return [{"content": reply, "embed": embed}]
+        
+        if self.state == State.ADDITIONAL_INFORMATION:
+            if message.content not in self.YES_NO:
+                return ["Unrecognized option. Please choose from the above options."]
+            elif message.content.startswith("1"):
+                msg = await self.client.wait_for("message")
+                if msg:
+                    self.message += f'Additional information: {msg}'
+                    self.REPORTS.append(msg)
+                    self.NUM_REPORTS += 1
+            self.state = State.BLOCK_STATE
+            return ["Thank you for your report! We've received your report! Our content moderation team will promptly review the report."]
+
+        elif message.content != self.MOD_START_KEYWORD and self.state in [
+                State.CHOOSE_TYPE1, State.CHOOSE_TYPE2, State.CHOOSE_TYPE3, State.CHOOSE_TYPE4, State.BLOCK_STATE]:
+            return ["Your report is currently under review. We will update you on the status of the report promptly."]
+
+        if message.content == self.MOD_START_KEYWORD and self.state in [
+                State.CHOOSE_TYPE1, State.CHOOSE_TYPE2, State.CHOOSE_TYPE3, State.CHOOSE_TYPE4, State.BLOCK_STATE]:
             reply = (
                 'Thank you for starting the moderation process\n'
                 f'Here is a summary of the report:\n\n{self.message}\n'
