@@ -144,10 +144,10 @@ class ModBot(discord.Client):
                 await message.channel.send('`...ongoing moderation...`')
             else:
                 # Get next report with highest priority
-                if not self.high_priority_queue.is_empty:
-                    next_report = self.high_priority_queue.dequeue
-                else if not self.low_priority_queue.is_empty:
-                    next_report = self.low_priority_queue.dequeue
+                if not self.high_priority_queue.is_empty():
+                    next_report = self.high_priority_queue.dequeue()
+                elif not self.low_priority_queue.is_empty():
+                    next_report = self.low_priority_queue.dequeue()
                 else:
                     await message.channel.send(
                         'There are no active reports to moderate. Thank you for checking.')
@@ -186,7 +186,7 @@ class ModBot(discord.Client):
                 if len(self.false_report_history[author_id]) < FALSE_REPORTING_LIMIT:
                     self.reports[author_id] = Report(self)
                    # Generate a priority and assign to appropriate queue
-                    self.assign_report_priority(self.reports[author_id])
+                    self.assign_report_priority(author_id, self.reports[author_id])
                 else:
                     await message.channel.send(
                         'You are temporarily suspended from making reports because you have made too many false reports recently.'
@@ -209,13 +209,14 @@ class ModBot(discord.Client):
         scores = self.eval_text(message.content)
         await mod_channel.send(self.code_format(scores))
 
-    def assign_report_priority(report):
+    def assign_report_priority(self, author_id, report):
+        # TODO: check report ot predict priority
         priority = random.randint(1, 10)
         if priority <= 5:
-            self.low_priority_queue.enqueue(report, priority)
+            self.low_priority_queue.enqueue(author_id, priority)
         else:
-            self.high_priority_queue.enqueue(report, priority)
-    
+            self.high_priority_queue.enqueue(author_id, priority)
+
     def eval_text(self, message):
         ''''
         TODO: Once you know how you want to evaluate messages in your channel, 
