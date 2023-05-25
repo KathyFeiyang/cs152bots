@@ -146,6 +146,15 @@ class Report:
         embed.add_field(name="(3)",
                         value="Selective Reporting",
                         inline=False)
+        embed.add_field(name="(4)",
+                        value="Conspiracy theory",
+                        inline=False)
+        embed.add_field(name="(5)",
+                        value="Fabricated information",
+                        inline=False)
+        embed.add_field(name="(6)",
+                        value="Misleading information",
+                        inline=False)
 
         embed.set_footer(text="Ex: To select 'Quoting out of context', type `1`.")
 
