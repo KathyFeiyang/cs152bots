@@ -6,6 +6,15 @@ class State(Enum):
     REPORT_START = auto()
     AWAITING_MESSAGE = auto()
     MESSAGE_IDENTIFIED = auto()
+    CATEGORY_CHOSEN = auto()
+    CATEGORY_L2_CHOSEN = auto()
+    CHOOSE_TYPE1 = auto()
+    CHOOSE_TYPE2 = auto()
+    CHOOSE_TYPE3 = auto()
+    CHOOSE_TYPE4 = auto()
+    # PROVIDE_CONTEXT = auto()
+    # USER_INPUT = auto()
+    # BLOCK_STATE = auto()
     REPORT_COMPLETE = auto()
     MOD_START = auto()
     MOD_1 = auto()
@@ -14,6 +23,7 @@ class State(Enum):
     MOD_4 = auto()
     EMERGENCY = auto()
     HIGHER_LEVEL_MOD = auto()
+
 
 class Report:
     # User reporting
@@ -49,6 +59,8 @@ class Report:
         '4. Remove content and temporarily suspend user account',
         '5. Remove content and remove user account',
     ]
+
+    ABUSE_TYPES = ['1', '2', '3', '4']
 
     def __init__(self, client):
         self.state = State.REPORT_START
@@ -93,16 +105,81 @@ class Report:
             # Here we've found the message - it's up to you to decide what to do next!
             self.message = '-' * 50 + '\n'
             self.message += f'REPORT [from: {message.author.name}]\nContent:\n```{message.content}```'
-            self.message += '-' * 50 + '\n'
             self.state = State.MESSAGE_IDENTIFIED
-            return ["I found this message:", "```" + message.author.name + ": " + message.content + "```", \
-                    "This is all I know how to do right now - it's up to you to build out the rest of my reporting flow!"]
-        
-        if message.content != self.MOD_START_KEYWORD and self.state == State.MESSAGE_IDENTIFIED:
-            # TODO: implement reporting flow
-            return ["<insert rest of reporting flow here>"]
+            return [
+                "I found this message:",
+                "```" + message.author.name + ": " + message.content + "```",
+                "Is this correct? Please answer `Yes` or `No`"]
 
-        if message.content == self.MOD_START_KEYWORD and self.state == State.MESSAGE_IDENTIFIED:
+        if self.state == State.MESSAGE_IDENTIFIED:
+            reply = "Here is the reported message:\n" + "```" + message.author.name + ": " + message.content + "```"
+
+            if message.content.lower() in ['no', 'n']:
+                return ["Please double check the message link and say `cancel` to cancel."]
+
+            embed = discord.Embed(
+                color = discord.Colour.dark_blue(),
+                title="Please choose the category of disinformation that best describes your reason for reporting"
+            )
+
+            embed.add_field(
+                name="(1)",
+                value="False/misleading information",
+                inline=False
+            )
+
+            embed.add_field(
+                name="(2)",
+                value="Harassment and Bullying",
+                inline=False
+            )
+
+            embed.add_field(
+                name="(3)",
+                value="Fraud and Scams",
+                inline=False
+            )
+
+            embed.add_field(
+                name="(4)",
+                value="Violent and Harmful content",
+                inline=False
+            )
+
+            embed.set_footer(text="Ex: To select 'False/misleading information', type `1`.")
+            self.state = State.CATEGORY_CHOSEN
+
+            return [{"content": reply, "embed": embed}]
+
+        if self.state == State.CATEGORY_CHOSEN:
+            if message.content not in self.ABUSE_TYPES:
+                return ["Unrecognized option. Please choose from the above options."]
+            elif message.content == "1":
+                self.state = State.CHOOSE_TYPE1
+                reply = ""
+                embed = Report.type1_embed()
+            elif message.content == "2":
+                self.state = State.CHOOSE_TYPE2
+                reply = ""
+                embed = Report.type2_embed()
+            elif message.content == "3":
+                self.state = State.CHOOSE_TYPE3
+                reply = ""
+                embed = Report.type3_embed()
+            elif message.content == "4":
+                self.state = State.CHOOSE_TYPE4
+                reply = ""
+                embed = Report.type4_embed()
+            self.message += f"[C1={message.content}]"
+            self.state = State.CATEGORY_L2_CHOSEN
+            return [{"content": reply, "embed": embed}]
+
+        if message.content != self.MOD_START_KEYWORD and self.state == State.CATEGORY_L2_CHOSEN:
+            self.message += f'[C2={message.content}]'
+            self.message += '-' * 50 + '\n'
+            return ['Thank you for filling out the report.']
+
+        if message.content == self.MOD_START_KEYWORD and self.state == State.CATEGORY_L2_CHOSEN:
             reply = (
                 'Thank you for starting the moderation process\n'
                 f'Here is a summary of the report:\n\n{self.message}\n'
@@ -180,6 +257,113 @@ class Report:
             )
             self.state = State.REPORT_COMPLETE
             return [reply]
+
+    
+    @classmethod
+    def type1_embed(cls):
+        embed = discord.Embed(
+            color=discord.Colour.dark_blue(),
+            title="What type of false/misleading information does the message fall under?"
+        )
+
+        embed.add_field(name="(1)",
+                        value="Quoting out of context",
+                        inline=False)
+        embed.add_field(name="(2)",
+                        value="Exaggerated claims",
+                        inline=False)
+        embed.add_field(name="(3)",
+                        value="Selective Reporting",
+                        inline=False)
+        embed.add_field(name="(4)",
+                        value="Conspiracy theory",
+                        inline=False)
+        embed.add_field(name="(5)",
+                        value="Fabricated information",
+                        inline=False)
+        embed.add_field(name="(6)",
+                        value="Misleading information",
+                        inline=False)
+
+        embed.set_footer(text="Ex: To select 'Quoting out of context', type `1`.")
+
+        return embed
+    
+    @classmethod
+    def type2_embed(cls):
+        embed = discord.Embed(
+            color=discord.Colour.dark_blue(),
+            title="What type of harassment/bullying does the message fall under?"
+        )
+
+        embed.add_field(name="(1)",
+                        value="Sexual Harassment",
+                        inline=False)
+        embed.add_field(name="(2)",
+                        value="Doxxing",
+                        inline=False)
+        embed.add_field(name="(3)",
+                        value="Stalking",
+                        inline=False)
+        embed.add_field(name="(4)",
+                        value="Threat or Personal Attack",
+                        inline=False)
+
+        embed.set_footer(text="Ex: To select 'Sexual Harassment', type `1`.")
+
+        return embed
+    
+    @classmethod
+    def type3_embed(cls):
+        embed = discord.Embed(
+            color=discord.Colour.dark_blue(),
+            title="What type of fraud/scam does the message fall under?"
+        )
+
+        embed.add_field(name="(1)",
+                        value="Phishing",
+                        inline=False)
+        embed.add_field(name="(2)",
+                        value="Identity Fraud",
+                        inline=False)
+        embed.add_field(name="(3)",
+                        value="Product Scam",
+                        inline=False)
+        embed.add_field(name="(4)",
+                        value="Fake/Bot Account",
+                        inline=False)
+
+        embed.set_footer(text="Ex: To select 'Phishing', type `1`.")
+
+        return embed
+    
+    @classmethod
+    def type4_embed(cls):
+        embed = discord.Embed(
+            color=discord.Colour.dark_blue(),
+            title="Please report how the content was violent or harmful."
+        )
+
+        embed.add_field(
+            name="(1)",
+            value="Graphic Violence",
+            inline=False)
+        embed.add_field(
+            name="(2)",
+            value="Child Exploitation",
+            inline=False)
+        embed.add_field(
+            name="(3)",
+            value="Terrorist Content",
+            inline=False)
+        embed.add_field(
+            name="(4)",
+            value="Non-Consensual Explicit Content",
+            inline=False)
+
+        embed.set_footer(text="Ex: To select 'Graphic Violence', type `1`.")
+
+        return embed
 
 
     def report_complete(self):
