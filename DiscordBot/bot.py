@@ -35,7 +35,7 @@ with open(MODERATOR_LIST_PATH) as f:
     moderators = json.load(f)
 
 
-FALSE_REPORTING_LIMIT = 1
+FALSE_REPORTING_LIMIT = 5
 
 # Simple priority queue implementation to rank reports by urgency 1-10
 class PriorityQueue:
