@@ -12,6 +12,7 @@ import requests
 from report import Report
 import pdb
 import pprint
+import queue
 import random
 
 # Set up logging to the console
@@ -43,6 +44,8 @@ MID_HIGH_TH = 0.8
 DISTRIBUTION_TH = 6
 VULNERABILITY_TH = 6
 MODEL_AUTHOR_ID = 'AUTO_FLAGGING_MODEL'
+MAX_QUEUE_SIZE = 1000000
+OVERRIDE_HIGH_PRIORITY = 'Special attention needed'
 
 
 class Mode(Enum):
@@ -80,8 +83,8 @@ class ModBot(discord.Client):
         super().__init__(command_prefix='.', intents=intents)
         self.group_num = None
         self.mod_channels = {} # Map from guild to the mod channel id for that guild
-        self.high_priority_queue = PriorityQueue()
-        self.low_priority_queue = PriorityQueue() #Order reports by priority
+        self.high_priority_queue = queue.PriorityQueue(maxsize=MAX_QUEUE_SIZE)
+        self.low_priority_queue = queue.PriorityQueue(maxsize=MAX_QUEUE_SIZE) #Order reports by priority
         self.reports = {} # Map from user IDs to the state of their report
         self.moderators = moderators
         self.moderator_assignments = {}
@@ -157,12 +160,14 @@ class ModBot(discord.Client):
             if author_id in self.moderator_assignments:
                 await message.channel.send('`...ongoing moderation...`')
             else:
+                print('\n[DEBUG] Priority queues')
+                print(self.high_priority_queue.qsize())
+                print(self.low_priority_queue.qsize())
                 # Get next report with highest priority
-                # TODO: check priority queue integration
-                if not self.high_priority_queue.is_empty():
-                    next_report = self.high_priority_queue.dequeue()
-                elif not self.low_priority_queue.is_empty():
-                    next_report = self.low_priority_queue.dequeue()
+                if not self.high_priority_queue.empty():
+                    _, next_report = self.high_priority_queue.get()
+                elif not self.low_priority_queue.empty():
+                    _, next_report = self.low_priority_queue.get()
                 else:
                     await message.channel.send(
                         'There are no active reports to moderate. Thank you for checking.')
@@ -224,9 +229,9 @@ class ModBot(discord.Client):
         priority, further_moderation_needed = self.compute_priority(
             message, score, info)
         info['priority'] = priority
-        print('\ndebug handle_channel_message')
+        print('\n[DEBUG] handle_channel_message')
         print(score, info, priority, further_moderation_needed)
-        if further_moderation_needed:
+        if further_moderation_needed or (OVERRIDE_HIGH_PRIORITY in info and info[OVERRIDE_HIGH_PRIORITY]):
             reporting_user_id = f'{MODEL_AUTHOR_ID}_{datetime.now()}'
             self.reports[reporting_user_id] = Report(
                 client=self,
@@ -234,7 +239,10 @@ class ModBot(discord.Client):
                 reporting_user_id=reporting_user_id,
                 score=score,
                 info=info)
-            self.assign_report_priority(reporting_user_id, priority)
+            self.assign_report_priority(
+                reporting_user_id,
+                priority,
+                override_high_priority=OVERRIDE_HIGH_PRIORITY in info and info[OVERRIDE_HIGH_PRIORITY])
             print(f'Auto flagged message filed as report for {reporting_user_id}')
 
             # Forward the message to the mod channel
@@ -262,11 +270,11 @@ class ModBot(discord.Client):
         return priority, True
 
 
-    def assign_report_priority(self, author_id, priority):
-        if priority <= 5:
-            self.low_priority_queue.enqueue(author_id, priority)
+    def assign_report_priority(self, author_id, priority, override_high_priority=False):
+        if priority <= 5 and not override_high_priority:
+            self.low_priority_queue.put((-1. * priority, author_id))
         else:
-            self.high_priority_queue.enqueue(author_id, priority)
+            self.high_priority_queue.put((-1. * priority, author_id))
 
     
     def code_format(self, message, score, info):
@@ -283,7 +291,13 @@ class ModBot(discord.Client):
 
     def run_disinfo_model(self, message):
         # TODO: replace with our own models
-        return 0.8, {'info': 'placeholder'}
+        score = random.random()
+        info = {
+            'info': 'placeholder',
+            OVERRIDE_HIGH_PRIORITY: random.random() > 0.5,
+        }
+        print(f'\n[DEBUG] disinfo model: {score}, {info}')
+        return score, info
 
 
     def get_distribution_score(self, message):
