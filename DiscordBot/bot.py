@@ -3,6 +3,7 @@ from collections import defaultdict
 from datetime import datetime
 import discord
 from discord.ext import commands
+from enum import Enum, auto
 import os
 import json
 import logging
@@ -36,6 +37,17 @@ with open(MODERATOR_LIST_PATH) as f:
 
 
 FALSE_REPORTING_LIMIT = 5
+LOW_MID_TH = 0.2
+MID_HIGH_TH = 0.8
+DISTRIBUTION_TH = 6
+VULNERABILITY_TH = 6
+MODEL_AUTHOR_ID = 'AUTO_FLAGGING_MODEL'
+
+
+class Mode(Enum):
+    RAPID_RESPONSE_TO_HARM = auto()
+    BEST_ACCURACY = auto()
+
 
 # Simple priority queue implementation to rank reports by urgency 1-10
 class PriorityQueue:
@@ -59,8 +71,9 @@ class PriorityQueue:
             raise Exception("Priority queue is empty.")
         return self.queue[0][0]
 
+
 class ModBot(discord.Client):
-    def __init__(self): 
+    def __init__(self, mode): 
         intents = discord.Intents.default()
         intents.messages = True
         super().__init__(command_prefix='.', intents=intents)
@@ -73,6 +86,7 @@ class ModBot(discord.Client):
         self.moderators = moderators
         self.moderator_assignments = {}
         self.false_report_history = defaultdict(list)
+        self.mode = mode
 
 
     async def on_ready(self):
@@ -144,6 +158,7 @@ class ModBot(discord.Client):
                 await message.channel.send('`...ongoing moderation...`')
             else:
                 # Get next report with highest priority
+                # TODO: check priority queue integration
                 if not self.high_priority_queue.is_empty():
                     next_report = self.high_priority_queue.dequeue()
                 elif not self.low_priority_queue.is_empty():
@@ -185,8 +200,10 @@ class ModBot(discord.Client):
             if author_id not in self.reports and message.content.startswith(Report.START_KEYWORD):
                 if len(self.false_report_history[author_id]) < FALSE_REPORTING_LIMIT:
                     self.reports[author_id] = Report(self)
-                   # Generate a priority and assign to appropriate queue
-                    self.assign_report_priority(author_id, self.reports[author_id])
+                    # Generate a priority and assign to appropriate queue
+                    score, info = self.run_disinfo_model(message)
+                    priority = int(score * 10)
+                    self.assign_report_priority(author_id, priority)
                 else:
                     await message.channel.send(
                         'You are temporarily suspended from making reports because you have made too many false reports recently.'
@@ -203,19 +220,47 @@ class ModBot(discord.Client):
         if not message.channel.name == f'group-{self.group_num}':
             return
 
-        # Forward the message to the mod channel
-        mod_channel = self.mod_channels[message.guild.id]
-        await mod_channel.send(f'Forwarded message:\n{message.author.name}: "{message.content}"')
-        scores = self.eval_text(message.content)
-        await mod_channel.send(self.code_format(scores))
+        # TODO: add thresholding system depending on bot mode
+        score, info = self.run_disinfo_model(message)
+        priority, further_moderation_needed = self.compute_priority(
+            message, score, info)
+        if further_moderation_needed:
+            self.reports[MODEL_AUTHOR_ID] = Report(self)
+            self.assign_report_priority(MODEL_AUTHOR_ID, priority)
+            #TODO: fill in detected information
+            #TODO: skip to moderation state
 
-    def assign_report_priority(self, author_id, report):
-        # TODO: check report ot predict priority
-        priority = random.randint(1, 10)
+            # Forward the message to the mod channel
+            mod_channel = self.mod_channels[message.guild.id]
+            await mod_channel.send(self.code_format(message, score, info))
+
+
+    def compute_priority(self, message, score, info):
+        if score <= LOW_MID_TH:
+            return 0, False
+        elif score > MID_HIGH_TH:
+            return 0, True
+        if self.mode == Mode.RAPID_RESPONSE_TO_HARM:
+            distribution_score = self.get_distribution_score(message)
+            vulnerability_score = self.get_vulnerability_score(message)
+            if (distribution_score > DISTRIBUTION_TH or
+                vulnerability_score > VULNERABILITY_TH):
+                priority = max(
+                    distribution_score,
+                    vulnerability_score,
+                    6,
+                    int(score * 10))
+        else:
+            priority = int(score * 10)
+        return priority, True
+
+
+    def assign_report_priority(self, author_id, priority):
         if priority <= 5:
             self.low_priority_queue.enqueue(author_id, priority)
         else:
             self.high_priority_queue.enqueue(author_id, priority)
+
 
     def eval_text(self, message):
         ''''
@@ -229,13 +274,31 @@ class ModBot(discord.Client):
             return 0
 
     
-    def code_format(self, text):
+    def code_format(self, message, score, info):
         ''''
         TODO: Once you know how you want to show that a message has been 
         evaluated, insert your code here for formatting the string to be 
         shown in the mod channel. 
         '''
-        return "Evaluated: '" + text+ "'"
+        return (
+            f'Auto flagged message:\n{message.author.name}: "{message.content}"\n',
+            f'- Score: {score:.3f}\n',
+            f'- Info: {info}\n')
+
+
+    def run_disinfo_model(self, message):
+        # TODO: replace with our own models
+        return 0.8, dict()
+
+
+    def get_distribution_score(self, message):
+        # TODO: dummy function
+        return random.randint(1, 11)
+
+
+    def get_vulnerability_score(self, message):
+        # TODO: dummy function
+        return random.randint(1, 11)
 
 
     def mod_summary(self, user_id, report):
@@ -245,5 +308,6 @@ class ModBot(discord.Client):
         return summary
 
 
-client = ModBot()
-client.run(discord_token)
+if __name__ == '__main__':
+    client = ModBot(mode=Mode.BEST_ACCURACY)
+    client.run(discord_token)
