@@ -11,6 +11,7 @@ import re
 import requests
 from report import Report
 import pdb
+import pprint
 import random
 
 # Set up logging to the console
@@ -82,7 +83,6 @@ class ModBot(discord.Client):
         self.high_priority_queue = PriorityQueue()
         self.low_priority_queue = PriorityQueue() #Order reports by priority
         self.reports = {} # Map from user IDs to the state of their report
-        # TODO: manage moderator - report assignments
         self.moderators = moderators
         self.moderator_assignments = {}
         self.false_report_history = defaultdict(list)
@@ -174,9 +174,10 @@ class ModBot(discord.Client):
             # If the report is complete or cancelled, remove it from our map
             if (self.reports[self.moderator_assignments[author_id]].report_complete()
                 or self.reports[self.moderator_assignments[author_id]].report_escalated()):
-                reporting_user = await self.fetch_user(int(self.moderator_assignments[author_id]))
-                await reporting_user.send((
-                    f'Your earlier report has been resolved: {self.reports[self.moderator_assignments[author_id]].final_action}'))
+                if not MODEL_AUTHOR_ID in self.moderator_assignments[author_id]:
+                    reporting_user = await self.fetch_user(int(self.moderator_assignments[author_id]))
+                    await reporting_user.send((
+                        f'Your earlier report has been resolved: {self.reports[self.moderator_assignments[author_id]].final_action}'))
                 mod_channel = discord.utils.get(
                     self.get_all_channels(),
                     name=f'group-{self.group_num}-mod') 
@@ -184,9 +185,9 @@ class ModBot(discord.Client):
                     self.moderator_assignments[author_id],
                     self.reports[self.moderator_assignments[author_id]]))
                 stats = self.reports[self.moderator_assignments[author_id]].report_stats()
-                if stats['false_reporting']:
+                if stats['false_reporting'] and not MODEL_AUTHOR_ID in stats['reporting_user']:
                     self.false_report_history[str(stats['reporting_user'])].append(datetime.now())
-                    print(stats)
+                    print('False reporting updated:', stats)
                 self.reports.pop(self.moderator_assignments[author_id])
                 self.moderator_assignments.pop(author_id)
         else:
@@ -212,7 +213,6 @@ class ModBot(discord.Client):
             await self.process_message(
                 message=message,
                 author_id=author_id)
-            # TODO: support reporting of users, in addition to content
 
 
     async def handle_channel_message(self, message):
@@ -220,15 +220,22 @@ class ModBot(discord.Client):
         if not message.channel.name == f'group-{self.group_num}':
             return
 
-        # TODO: add thresholding system depending on bot mode
         score, info = self.run_disinfo_model(message)
         priority, further_moderation_needed = self.compute_priority(
             message, score, info)
+        info['priority'] = priority
+        print('\ndebug handle_channel_message')
+        print(score, info, priority, further_moderation_needed)
         if further_moderation_needed:
-            self.reports[MODEL_AUTHOR_ID] = Report(self)
-            self.assign_report_priority(MODEL_AUTHOR_ID, priority)
-            #TODO: fill in detected information
-            #TODO: skip to moderation state
+            reporting_user_id = f'{MODEL_AUTHOR_ID}_{datetime.now()}'
+            self.reports[reporting_user_id] = Report(
+                client=self,
+                message=message,
+                reporting_user_id=reporting_user_id,
+                score=score,
+                info=info)
+            self.assign_report_priority(reporting_user_id, priority)
+            print(f'Auto flagged message filed as report for {reporting_user_id}')
 
             # Forward the message to the mod channel
             mod_channel = self.mod_channels[message.guild.id]
@@ -261,18 +268,6 @@ class ModBot(discord.Client):
         else:
             self.high_priority_queue.enqueue(author_id, priority)
 
-
-    def eval_text(self, message):
-        ''''
-        TODO: Once you know how you want to evaluate messages in your channel, 
-        insert your code here! This will primarily be used in Milestone 3. 
-        '''
-        # TODO: swap with model in milestone 3
-        if 'disinformation' in message.lower():
-            return 1
-        else:
-            return 0
-
     
     def code_format(self, message, score, info):
         ''''
@@ -281,23 +276,23 @@ class ModBot(discord.Client):
         shown in the mod channel. 
         '''
         return (
-            f'Auto flagged message:\n{message.author.name}: "{message.content}"\n',
-            f'- Score: {score:.3f}\n',
-            f'- Info: {info}\n')
+            f'**AUTO FLAGGING**\n{message.author.name}: "{message.content}"\n'
+            f'- Score: {score:.3f}\n'
+            f'- Info: {pprint.pformat(info, indent=4)}\n')
 
 
     def run_disinfo_model(self, message):
         # TODO: replace with our own models
-        return 0.8, dict()
+        return 0.8, {'info': 'placeholder'}
 
 
     def get_distribution_score(self, message):
-        # TODO: dummy function
+        # Dummy function
         return random.randint(1, 11)
 
 
     def get_vulnerability_score(self, message):
-        # TODO: dummy function
+        # Dummy function
         return random.randint(1, 11)
 
 

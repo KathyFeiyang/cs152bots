@@ -1,5 +1,6 @@
 from enum import Enum, auto
 import discord
+import pprint
 import re
 
 class State(Enum):
@@ -63,14 +64,33 @@ class Report:
     ABUSE_TYPES = ['1', '2', '3', '4']
     YES_NO = ['1', '2']
 
-    def __init__(self, client):
-        self.state = State.REPORT_START
+
+    def __init__(
+            self,
+            client,
+            message=None,
+            reporting_user_id=None,
+            score=None,
+            info=None,
+    ):
         self.client = client
-        self.message = None
-        self.message_obj = None
-        self.reporting_user_id = None
-        self.false_reporting = False
         self.final_action = ''
+        self.false_reporting = False
+        if message is None:
+            self.state = State.REPORT_START
+            self.message = None
+            self.message_obj = None
+            self.reporting_user_id = None
+        else:
+            # Auto-flagging
+            self.state = State.IN_REVIEW_STATE
+            self.message = '-' * 50 + '\n'
+            self.message += f'AUTO REPORT [from: {message.author.name}]\nContent:\n```{message.content}```\n'
+            self.message += f'- Score: {score:.3f}\n'
+            self.message += f'- Info: {pprint.pformat(info, indent=4)}\n'
+            self.message += '-' * 50 + '\n'
+            self.message_obj = message
+            self.reporting_user_id = reporting_user_id
 
 
     def run_block_state(self):
@@ -492,7 +512,7 @@ class Report:
 
 
     def report_summary(self):
-        return f'- Status [{self.state}]\n{self.message}'
+        return f'- Status [{self.state}]\n- Platform action: {self.final_action}\n{self.message}'
 
 
     def report_stats(self):
