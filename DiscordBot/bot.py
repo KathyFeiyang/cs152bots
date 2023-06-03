@@ -11,6 +11,8 @@ import requests
 from report import Report
 import pdb
 import random
+import fn_classifier
+from time import sleep
 
 # Set up logging to the console
 logger = logging.getLogger('discord')
@@ -203,11 +205,20 @@ class ModBot(discord.Client):
         if not message.channel.name == f'group-{self.group_num}':
             return
 
+        # classifier taking in message and outputting score between 0 and 1
+        print("Calculating score...")
+        test_message = "The earth is not flat."
+        print("Content: ", test_message)
+        result = fn_classifier.query({"inputs": test_message}) 
+
         # Forward the message to the mod channel
         mod_channel = self.mod_channels[message.guild.id]
         await mod_channel.send(f'Forwarded message:\n{message.author.name}: "{message.content}"')
-        scores = self.eval_text(message.content)
-        await mod_channel.send(self.code_format(scores))
+
+        # use below code for score handling
+
+        scores = self.eval_text(result)
+        # await mod_channel.send(self.code_format(scores))
 
     def assign_report_priority(self, author_id, report):
         # TODO: check report ot predict priority
@@ -217,15 +228,22 @@ class ModBot(discord.Client):
         else:
             self.high_priority_queue.enqueue(author_id, priority)
 
-    def eval_text(self, message):
+    def eval_text(self, output):
         ''''
         TODO: Once you know how you want to evaluate messages in your channel, 
         insert your code here! This will primarily be used in Milestone 3. 
         '''
         # TODO: swap with model in milestone 3
-        if 'disinformation' in message.lower():
+
+        score = output[0][0]['score']
+        print("Score: ", score)
+
+        # fine tune thresholds later and add auto-delete, forward to mod, etc.
+        if score > 0.5:
+            # fake news
             return 1
         else:
+            # not fake news
             return 0
 
     
