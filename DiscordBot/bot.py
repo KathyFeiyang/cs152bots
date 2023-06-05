@@ -1,23 +1,27 @@
 # bot.py
+from enum import Enum, auto
 from collections import defaultdict
 from datetime import datetime
-import discord
-from discord.ext import commands
-from enum import Enum, auto
-import os
 import json
 import logging
-import re
-import requests
-from report import Report
+import os
 import pdb
 import pprint
 import queue
 import random
+import re
+import requests
 from time import sleep
+
+import discord
+from discord.ext import commands
+import numpy as np
+from uni2ascii import uni2ascii
+from unidecode import unidecode
 
 import fn_classifier
 import gpt4_classifier
+from report import Report
 
 
 # Set up logging to the console
@@ -307,7 +311,15 @@ class ModBot(discord.Client):
 
 
     def run_disinfo_model(self, message):
-        score, classification = self.classifier.classify_message(message.content)
+        ascii_content_v1 = unidecode(message.content)
+        ascii_content_v2 = uni2ascii(message.content)
+        print(f'\n[DEBUG] original message: {message.content}')
+        print(f'[DEBUG] ascii v1: {ascii_content_v1}')
+        print(f'[DEBUG] ascii v2: {ascii_content_v2}')
+        score_v1, classification_v1 = self.classifier.classify_message(ascii_content_v1)
+        score_v2, classification_v2 = self.classifier.classify_message(ascii_content_v2)
+        score = max(score_v1, score_v2)
+        classification = classification_v1 if score_v1 > score_v2 else classification_v2
         info = {
             'score': score,
             'classification': classification,
