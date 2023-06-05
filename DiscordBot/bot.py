@@ -14,9 +14,9 @@ import pdb
 import pprint
 import queue
 import random
-import fn_classifier
 from time import sleep
 
+import fn_classifier
 import gpt4_classifier
 
 
@@ -104,10 +104,10 @@ class ModBot(discord.Client):
             if not os.path.isfile(API_KEY_PATH):
                 raise Exception(f"{API_KEY_PATH} not found!")
             with open(API_KEY_PATH) as f:
-                api_key = json.load(f)['key']
+                api_key = json.load(f)['gpt4']
             self.classifier = gpt4_classifier.GPT4MisinformationClassifier(api_key)
         else:
-            self.classifier = None
+            self.classifier = fn_classifier.DistilRoBERTaFakeNewsClassifier()
 
     async def on_ready(self):
         print(f'{self.user.name} has connected to Discord! It is these guilds:')

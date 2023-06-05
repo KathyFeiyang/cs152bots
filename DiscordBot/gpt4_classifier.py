@@ -41,7 +41,7 @@ def main():
     if not os.path.isfile(API_KEY_PATH):
         raise Exception(f"{API_KEY_PATH} not found!")
     with open(API_KEY_PATH) as f:
-        api_key = json.load(f)['key']
+        api_key = json.load(f)['gpt4']
     classifier = GPT4MisinformationClassifier(api_key)
 
     # Messages to try
