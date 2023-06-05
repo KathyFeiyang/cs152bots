@@ -15,6 +15,9 @@ import pprint
 import queue
 import random
 
+import gpt4_classifier
+
+
 # Set up logging to the console
 logger = logging.getLogger('discord')
 logger.setLevel(logging.DEBUG)
@@ -37,7 +40,7 @@ if not os.path.isfile(MODERATOR_LIST_PATH):
 with open(MODERATOR_LIST_PATH) as f:
     moderators = json.load(f)
 
-
+API_KEY_PATH = 'key.json'
 FALSE_REPORTING_LIMIT = 5
 LOW_MID_TH = 0.2
 MID_HIGH_TH = 0.8
@@ -51,6 +54,11 @@ OVERRIDE_HIGH_PRIORITY = 'Special attention needed'
 class Mode(Enum):
     RAPID_RESPONSE_TO_HARM = auto()
     BEST_ACCURACY = auto()
+
+
+class Classifier(Enum):
+    GPT4 = auto()
+    ROBERTA_FAKENEWS = auto()
 
 
 # Simple priority queue implementation to rank reports by urgency 1-10
@@ -77,7 +85,7 @@ class PriorityQueue:
 
 
 class ModBot(discord.Client):
-    def __init__(self, mode): 
+    def __init__(self, mode, classifier_type): 
         intents = discord.Intents.default()
         intents.messages = True
         super().__init__(command_prefix='.', intents=intents)
@@ -90,7 +98,14 @@ class ModBot(discord.Client):
         self.moderator_assignments = {}
         self.false_report_history = defaultdict(list)
         self.mode = mode
-
+        if classifier_type == Classifier.GPT4:
+            if not os.path.isfile(API_KEY_PATH):
+                raise Exception(f"{API_KEY_PATH} not found!")
+            with open(API_KEY_PATH) as f:
+                api_key = json.load(f)['key']
+            self.classifier = gpt4_classifier.GPT4MisinformationClassifier(api_key)
+        else:
+            self.classifier = None
 
     async def on_ready(self):
         print(f'{self.user.name} has connected to Discord! It is these guilds:')
@@ -290,10 +305,10 @@ class ModBot(discord.Client):
 
 
     def run_disinfo_model(self, message):
-        # TODO: replace with our own models
-        score = random.random()
+        score, classification = self.classifier.classify_message(message.content)
         info = {
-            'info': 'placeholder',
+            'score': score,
+            'classification': classification,
             OVERRIDE_HIGH_PRIORITY: random.random() > 0.5,
         }
         print(f'\n[DEBUG] disinfo model: {score}, {info}')
@@ -318,5 +333,10 @@ class ModBot(discord.Client):
 
 
 if __name__ == '__main__':
-    client = ModBot(mode=Mode.BEST_ACCURACY)
+    MODE = Mode.BEST_ACCURACY
+    CLASSIFIER_TYPE = Classifier.GPT4
+
+    client = ModBot(
+        mode=MODE,
+        classifier_type=CLASSIFIER_TYPE)
     client.run(discord_token)
