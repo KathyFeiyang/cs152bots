@@ -149,6 +149,18 @@ class ModBot(discord.Client):
             await self.handle_dm(message)
 
 
+    async def on_raw_message_edit(self, payload):
+        '''
+        Called when a message is edited. 
+        '''
+        message = payload.cached_message
+        if message is None:
+            channel = self.get_channel(payload.channel_id)
+            message = await channel.fetch_message(payload.message_id)
+
+        await self.on_message(message)
+
+
     async def process_message(self, message, author_id):
         # Let the report class handle this message; forward all the messages it returns to uss
         responses = await self.reports[author_id].handle_message(message)
