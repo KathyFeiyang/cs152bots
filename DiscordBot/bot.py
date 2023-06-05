@@ -115,6 +115,7 @@ class ModBot(discord.Client):
         else:
             self.classifier = fn_classifier.DistilRoBERTaFakeNewsClassifier()
 
+
     async def on_ready(self):
         print(f'{self.user.name} has connected to Discord! It is these guilds:')
         for guild in self.guilds:
@@ -220,7 +221,7 @@ class ModBot(discord.Client):
                         f'Your earlier report has been resolved: {self.reports[self.moderator_assignments[author_id]].final_action}'))
                 mod_channel = discord.utils.get(
                     self.get_all_channels(),
-                    name=f'group-{self.group_num}-mod') 
+                    name=f'group-{self.group_num}-mod')
                 await mod_channel.send(self.mod_summary(
                     self.moderator_assignments[author_id],
                     self.reports[self.moderator_assignments[author_id]]))
@@ -241,18 +242,37 @@ class ModBot(discord.Client):
             if author_id not in self.reports and message.content.startswith(Report.START_KEYWORD):
                 if self.check_false_report_history(author_id):
                     self.reports[author_id] = Report(self)
-                    # Generate a priority and assign to appropriate queue
-                    # score, info = self.run_disinfo_model(message)
-                    # priority = int(score * 10)
-                    self.assign_report_priority(author_id, USER_REPORTING_PRIORITY)
+                    # self.assign_report_priority(author_id, USER_REPORTING_PRIORITY)
                 else:
                     await message.channel.send(
                         'You are temporarily suspended from making reports because you have made too many false reports recently.'
                         ' We apologize for the inconveninence. If you believe this is a mistake, please contact us at XXX-XXX-XXXX.')
                     return
+            if self.reports[author_id].message_obj is None:
+                adding_message = True
+            else:
+                adding_message = False
             await self.process_message(
                 message=message,
                 author_id=author_id)
+            if self.reports[author_id].message_obj is None:
+                adding_message = False
+            if adding_message:
+                # Generate a priority and assign to appropriate queue
+                score, info = self.run_disinfo_model(
+                    self.reports[author_id].message_obj)
+                priority = self.compute_priority(self.reports[author_id].message_obj, score, info)[0]
+                self.assign_report_priority(author_id, priority)
+                print('\n[DEBUG] Assigning priority to user report')
+                mod_channel = discord.utils.get(
+                    self.get_all_channels(),
+                    name=f'group-{self.group_num}-mod')
+                await mod_channel.send(
+                    f'--------------------------------------------------\n'
+                    f'Reports needing your attention:\n'
+                    f'- # reports in **high-priority** queue: **{self.high_priority_queue.qsize()}**\n'
+                    f'- # reports in **low-priority** queue: **{self.low_priority_queue.qsize()}**\n'
+                    f'--------------------------------------------------')
 
 
     def check_false_report_history(self, author_id):
