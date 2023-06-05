@@ -517,7 +517,7 @@ class Report:
 
     def report_stats(self):
         return {
-            'reported_user': self.message_obj.author.id,
-            'reporting_user': self.reporting_user_id,
+            'reported_user': str(self.message_obj.author.id),
+            'reporting_user': str(self.reporting_user_id),
             'false_reporting': self.false_reporting,
         }

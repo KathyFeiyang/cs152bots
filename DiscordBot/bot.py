@@ -48,6 +48,7 @@ with open(MODERATOR_LIST_PATH) as f:
 
 API_KEY_PATH = 'key.json'
 FALSE_REPORTING_LIMIT = 5
+FALSE_REPORTING_MEMORY_SPAN = 7
 LOW_MID_TH = 0.2
 MID_HIGH_TH = 0.8
 DISTRIBUTION_TH = 6
@@ -55,6 +56,7 @@ VULNERABILITY_TH = 6
 MODEL_AUTHOR_ID = 'AUTO_FLAGGING_MODEL'
 MAX_QUEUE_SIZE = 1000000
 OVERRIDE_HIGH_PRIORITY = 'Special attention needed'
+USER_REPORTING_PRIORITY = 9
 
 
 class Mode(Enum):
@@ -237,12 +239,12 @@ class ModBot(discord.Client):
             if author_id not in self.reports and not message.content.startswith(Report.START_KEYWORD):
                 return
             if author_id not in self.reports and message.content.startswith(Report.START_KEYWORD):
-                if len(self.false_report_history[author_id]) < FALSE_REPORTING_LIMIT:
+                if self.check_false_report_history(author_id):
                     self.reports[author_id] = Report(self)
                     # Generate a priority and assign to appropriate queue
-                    score, info = self.run_disinfo_model(message)
-                    priority = int(score * 10)
-                    self.assign_report_priority(author_id, priority)
+                    # score, info = self.run_disinfo_model(message)
+                    # priority = int(score * 10)
+                    self.assign_report_priority(author_id, USER_REPORTING_PRIORITY)
                 else:
                     await message.channel.send(
                         'You are temporarily suspended from making reports because you have made too many false reports recently.'
@@ -251,6 +253,18 @@ class ModBot(discord.Client):
             await self.process_message(
                 message=message,
                 author_id=author_id)
+
+
+    def check_false_report_history(self, author_id):
+        history = self.false_report_history[author_id]
+        updated_history = []
+        for event in history:
+            diff = datetime.now() - event
+            if diff.days > FALSE_REPORTING_MEMORY_SPAN:
+                continue
+            updated_history.append(event)
+        self.false_report_history[author_id] = updated_history
+        return len(self.false_report_history[author_id]) < FALSE_REPORTING_LIMIT
 
 
     async def handle_channel_message(self, message):
