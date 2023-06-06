@@ -47,10 +47,10 @@ with open(MODERATOR_LIST_PATH) as f:
     moderators = json.load(f)
 
 API_KEY_PATH = 'key.json'
-FALSE_REPORTING_LIMIT = 5
+FALSE_REPORTING_LIMIT = 1
 FALSE_REPORTING_MEMORY_SPAN = 7
 LOW_MID_TH = 0.2
-MID_HIGH_TH = 0.8
+# MID_HIGH_TH = 0.8
 DISTRIBUTION_TH = 6
 VULNERABILITY_TH = 6
 MODEL_AUTHOR_ID = 'AUTO_FLAGGING_MODEL'
@@ -156,10 +156,10 @@ class ModBot(discord.Client):
         '''
         Called when a message is edited. 
         '''
-        message = payload.cached_message
-        if message is None:
-            channel = self.get_channel(payload.channel_id)
-            message = await channel.fetch_message(payload.message_id)
+        # message = payload.cached_message
+        # if message is None:
+        channel = self.get_channel(payload.channel_id)
+        message = await channel.fetch_message(payload.message_id)
 
         await self.on_message(message)
 
@@ -315,13 +315,19 @@ class ModBot(discord.Client):
             # Forward the message to the mod channel
             mod_channel = self.mod_channels[message.guild.id]
             await mod_channel.send(self.code_format(message, score, info))
+            await mod_channel.send(
+                f'--------------------------------------------------\n'
+                f'Reports needing your attention:\n'
+                f'- # reports in **high-priority** queue: **{self.high_priority_queue.qsize()}**\n'
+                f'- # reports in **low-priority** queue: **{self.low_priority_queue.qsize()}**\n'
+                f'--------------------------------------------------')
 
 
     def compute_priority(self, message, score, info):
         if score <= LOW_MID_TH:
             return 0, False
-        elif score > MID_HIGH_TH:
-            return 0, True
+        # elif score > MID_HIGH_TH:
+        #     return 0, True
         if self.mode == Mode.RAPID_RESPONSE_TO_HARM:
             distribution_score = self.get_distribution_score(message)
             vulnerability_score = self.get_vulnerability_score(message)

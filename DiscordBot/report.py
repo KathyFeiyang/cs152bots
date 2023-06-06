@@ -185,7 +185,7 @@ class Report:
 
             embed = discord.Embed(
                 color = discord.Colour.dark_blue(),
-                title="Please choose the category of disinformation that best describes your reason for reporting"
+                title="Please choose the category that best describes your reason for reporting"
             )
 
             embed.add_field(
